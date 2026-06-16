@@ -722,10 +722,19 @@ if uploaded_file is not None:
         )
     )
 
-    resume_id = save_resume(
-        uploaded_file.name,
-        extracted_text
+    
+resume_id = save_resume(
+    uploaded_file.name,
+    extracted_text
+)
+
+if resume_id is None:
+    st.warning(
+        "Analysis completed, but "
+        "resume history could not be saved."
     )
+
+
 
     skills = extract_skills(
         extracted_text
