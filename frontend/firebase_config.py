@@ -67,3 +67,16 @@ def is_firebase_configured():
         and FIREBASE_PROJECT_ID
         and get_firebase_credentials()
     )
+print("FIREBASE_API_KEY:", FIREBASE_API_KEY)
+print("FIREBASE_PROJECT_ID:", FIREBASE_PROJECT_ID)
+
+try:
+    import streamlit as st
+
+    print(
+        "HAS FIREBASE_SERVICE_ACCOUNT:",
+        "FIREBASE_SERVICE_ACCOUNT" in st.secrets
+    )
+
+except Exception as e:
+    print("SECRETS ERROR:", e)
