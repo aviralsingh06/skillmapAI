@@ -1,7 +1,7 @@
 import sys
 import os
 
-from frontend.auth import init_auth_session, render_auth_page, render_sidebar_user_panel
+from auth import init_auth_session, render_auth_page, render_sidebar_user_panel
 
 sys.path.append(
     os.path.abspath(

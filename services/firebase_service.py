@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from frontend.firebase_config import (
+from firebase_config import (
     FIREBASE_API_KEY,
     FIREBASE_AUTH_URL,
     FIREBASE_CREDENTIALS_PATH,
