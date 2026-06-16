@@ -34,14 +34,52 @@ def save_resume(file_name, parsed_text):
             :file_name,
             :parsed_text
         )
+        RETURNING resume_id
     """)
 
     with engine.connect() as connection:
-        connection.execute(
+
+        result = connection.execute(
             query,
             {
                 "file_name": file_name,
                 "parsed_text": parsed_text
             }
         )
+
+        connection.commit()
+
+        return result.scalar()
+
+
+def save_extracted_skills(
+    resume_id,
+    skills
+):
+    """
+    Save extracted skills
+    """
+
+    query = text("""
+        INSERT INTO extracted_skills (
+            resume_id,
+            skill_name
+        )
+        VALUES (
+            :resume_id,
+            :skill_name
+        )
+    """)
+
+    with engine.connect() as connection:
+
+        for skill in skills:
+            connection.execute(
+                query,
+                {
+                    "resume_id": resume_id,
+                    "skill_name": skill
+                }
+            )
+
         connection.commit()

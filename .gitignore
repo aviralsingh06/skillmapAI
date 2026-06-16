@@ -17,3 +17,10 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+firebase-service-account.json
+*.pdf
+*_preview.png
+.streamlit/
+
+skillmap_report*
