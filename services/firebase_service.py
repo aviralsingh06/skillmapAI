@@ -26,14 +26,22 @@ def _get_firestore():
     if not is_firebase_configured():
         return None
 
+    import json
+    import streamlit as st
     import firebase_admin
     from firebase_admin import credentials, firestore
 
     if not firebase_admin._apps:
-        cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-        _firebase_app = firebase_admin.initialize_app(cred, {
-            "projectId": FIREBASE_PROJECT_ID
-        })
+        service_account_info = json.loads(
+            st.secrets["FIREBASE_SERVICE_ACCOUNT"]
+        )
+
+        cred = credentials.Certificate(service_account_info)
+
+        _firebase_app = firebase_admin.initialize_app(
+            cred,
+            {"projectId": FIREBASE_PROJECT_ID}
+        )
     else:
         _firebase_app = firebase_admin.get_app()
 

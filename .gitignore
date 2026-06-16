@@ -24,3 +24,5 @@ firebase-service-account.json
 .streamlit/
 
 skillmap_report*
+
+.streamlit/secrets.toml
