@@ -734,7 +734,9 @@ if uploaded_file is not None:
             "Could not read this PDF. "
             "Try another file."
         )
-        print(f"PDF parsing error: {e}")
+        print(
+            f"PDF parsing error: {e}"
+        )
         st.stop()
 
     try:
@@ -746,14 +748,18 @@ if uploaded_file is not None:
         if resume_id is None:
             st.warning(
                 "Analysis completed, but "
-                "resume history could not be saved."
+                "resume history could not "
+                "be saved."
             )
 
     except Exception as e:
         st.error(
-            "Database error while saving resume."
+            "Database error while "
+            "saving resume."
         )
-        print(f"Database save error: {e}")
+        print(
+            f"Database save error: {e}"
+        )
         st.stop()
 
     skills = extract_skills(
