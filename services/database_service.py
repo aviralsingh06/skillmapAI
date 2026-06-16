@@ -19,39 +19,34 @@ DATABASE_URL = (
     f"?sslmode=require"
 )
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    connect_args={"sslmode": "require"}
+)
 
 
 def save_resume(file_name, parsed_text):
-    """
-    Save uploaded resume to PostgreSQL
-    """
-
     query = text("""
-        INSERT INTO resumes (
-            file_name,
-            parsed_text
-        )
-        VALUES (
-            :file_name,
-            :parsed_text
-        )
+        INSERT INTO resumes (file_name, parsed_text)
+        VALUES (:file_name, :parsed_text)
         RETURNING resume_id
     """)
 
-    with engine.connect() as connection:
-
-        result = connection.execute(
-            query,
-            {
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(query, {
                 "file_name": file_name,
                 "parsed_text": parsed_text
-            }
-        )
+            })
 
-        connection.commit()
+            connection.commit()
+            return result.scalar()
 
-        return result.scalar()
+    except Exception as e:
+        print(f"Database save error: {e}")
+        return None
 
 
 def save_extracted_skills(
