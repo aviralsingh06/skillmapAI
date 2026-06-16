@@ -1,7 +1,5 @@
 import sys
 import os
-import json
-import time
 
 # Add project root to Python path
 sys.path.append(
@@ -17,28 +15,10 @@ import streamlit as st
 
 from firebase_config import is_firebase_configured
 from services.firebase_service import (
-    refresh_session,
     send_password_reset,
     sign_in,
     sign_up,
 )
-
-try:
-    from extra_streamlit_components import CookieManager
-    _COOKIE_MANAGER_AVAILABLE = True
-except ImportError:
-    _COOKIE_MANAGER_AVAILABLE = False
-
-AUTH_COOKIE_KEY = "skillmap_auth"
-COOKIE_MAX_AGE_DAYS = 30
-
-
-def _get_cookie_manager():
-    if not _COOKIE_MANAGER_AVAILABLE:
-        return None
-    if "cookie_manager" not in st.session_state:
-        st.session_state.cookie_manager = CookieManager()
-    return st.session_state.cookie_manager
 
 
 def init_auth_session():
@@ -50,8 +30,8 @@ def init_auth_session():
         "user_created_at": None,
         "id_token": None,
         "refresh_token": None,
-        "auth_restored": False,
     }
+
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -60,24 +40,17 @@ def _persist_session(user):
     st.session_state.authenticated = True
     st.session_state.user_uid = user["uid"]
     st.session_state.user_email = user["email"]
-    st.session_state.user_name = user.get("display_name", user["email"])
-    st.session_state.user_created_at = user.get("created_at")
-    st.session_state.id_token = user["id_token"]
-    st.session_state.refresh_token = user["refresh_token"]
-
-    cookie_manager = _get_cookie_manager()
-    if cookie_manager is None:
-        return
-
-    cookie_manager.set(
-        AUTH_COOKIE_KEY,
-        json.dumps({
-            "refresh_token": user["refresh_token"],
-            "uid": user["uid"]
-        }),
-        expires_at=time.time() + (COOKIE_MAX_AGE_DAYS * 86400),
-        key=f"set_{AUTH_COOKIE_KEY}"
+    st.session_state.user_name = user.get(
+        "display_name",
+        user["email"]
     )
+    st.session_state.user_created_at = user.get(
+        "created_at"
+    )
+    st.session_state.id_token = user["id_token"]
+    st.session_state.refresh_token = user[
+        "refresh_token"
+    ]
 
 
 def _clear_session():
@@ -88,43 +61,6 @@ def _clear_session():
     st.session_state.user_created_at = None
     st.session_state.id_token = None
     st.session_state.refresh_token = None
-
-    cookie_manager = _get_cookie_manager()
-    if cookie_manager is not None:
-        cookie_manager.delete(AUTH_COOKIE_KEY, key=f"del_{AUTH_COOKIE_KEY}")
-
-
-def restore_session_from_cookie():
-    if st.session_state.auth_restored:
-        return
-
-    st.session_state.auth_restored = True
-
-    if st.session_state.authenticated:
-        return
-
-    cookie_manager = _get_cookie_manager()
-    if cookie_manager is None:
-        return
-
-    raw = cookie_manager.get(AUTH_COOKIE_KEY)
-    if not raw:
-        return
-
-    try:
-        cookie_data = json.loads(raw)
-        refresh_token = cookie_data.get("refresh_token")
-        if not refresh_token:
-            return
-
-        user, error = refresh_session(refresh_token)
-        if error or not user:
-            _clear_session()
-            return
-
-        _persist_session(user)
-    except (json.JSONDecodeError, TypeError):
-        _clear_session()
 
 
 def logout_user():
@@ -189,26 +125,30 @@ def _inject_auth_css():
 
 def render_auth_page():
     _inject_auth_css()
-    restore_session_from_cookie()
 
     if st.session_state.authenticated:
         return
 
     if not is_firebase_configured():
         st.error(
-            "Firebase is not configured. Add your credentials to `.env` and "
-            "`firebase-service-account.json`. See `FIREBASE_SETUP.md`."
+            "Firebase is not configured."
         )
         return
 
     st.markdown(
         """
         <div class="auth-wrapper">
-            <div class="auth-brand">SkillMap AI</div>
-            <div class="auth-title">Welcome back</div>
+            <div class="auth-brand">
+                SkillMap AI
+            </div>
+            <div class="auth-title">
+                Welcome back
+            </div>
             <div class="auth-subtitle">
-                Sign in to access your resume intelligence dashboard,
-                saved analyses, and progress analytics.
+                Sign in to access your
+                resume intelligence dashboard,
+                saved analyses,
+                and progress analytics.
             </div>
         </div>
         """,
@@ -220,9 +160,20 @@ def render_auth_page():
     )
 
     with tab_login:
-        with st.form("login_form", clear_on_submit=False):
-            email = st.text_input("Email", placeholder="you@example.com")
-            password = st.text_input("Password", type="password")
+        with st.form(
+            "login_form",
+            clear_on_submit=False
+        ):
+            email = st.text_input(
+                "Email",
+                placeholder="you@example.com"
+            )
+
+            password = st.text_input(
+                "Password",
+                type="password"
+            )
+
             submitted = st.form_submit_button(
                 "Sign In",
                 use_container_width=True,
@@ -231,33 +182,50 @@ def render_auth_page():
 
             if submitted:
                 if not email or not password:
-                    st.warning("Please enter both email and password.")
+                    st.warning(
+                        "Please enter both email and password."
+                    )
                 else:
-                    user, error = sign_in(email.strip(), password)
+                    user, error = sign_in(
+                        email.strip(),
+                        password
+                    )
+
                     if error:
                         st.error(error)
                     else:
                         _persist_session(user)
-                        st.success("Logged in successfully!")
+                        st.success(
+                            "Logged in successfully!"
+                        )
                         st.rerun()
 
     with tab_signup:
-        with st.form("signup_form", clear_on_submit=False):
-            name = st.text_input("Full Name", placeholder="Your name")
+        with st.form(
+            "signup_form",
+            clear_on_submit=False
+        ):
+            name = st.text_input(
+                "Full Name",
+                placeholder="Your name"
+            )
+
             email = st.text_input(
                 "Email",
                 placeholder="you@example.com",
                 key="signup_email"
             )
+
             password = st.text_input(
                 "Password",
-                type="password",
-                help="Minimum 6 characters"
+                type="password"
             )
+
             confirm = st.text_input(
                 "Confirm Password",
                 type="password"
             )
+
             submitted = st.form_submit_button(
                 "Create Account",
                 use_container_width=True,
@@ -266,31 +234,48 @@ def render_auth_page():
 
             if submitted:
                 if not email or not password:
-                    st.warning("Email and password are required.")
+                    st.warning(
+                        "Email and password are required."
+                    )
+
                 elif password != confirm:
-                    st.warning("Passwords do not match.")
+                    st.warning(
+                        "Passwords do not match."
+                    )
+
                 elif len(password) < 6:
-                    st.warning("Password must be at least 6 characters.")
+                    st.warning(
+                        "Password must be at least 6 characters."
+                    )
+
                 else:
                     user, error = sign_up(
                         email.strip(),
                         password,
-                        name.strip() if name else None
+                        name.strip()
+                        if name else None
                     )
+
                     if error:
                         st.error(error)
                     else:
                         _persist_session(user)
-                        st.success("Account created! Welcome to SkillMap AI.")
+                        st.success(
+                            "Account created!"
+                        )
                         st.rerun()
 
     with tab_reset:
-        with st.form("reset_form", clear_on_submit=False):
+        with st.form(
+            "reset_form",
+            clear_on_submit=False
+        ):
             email = st.text_input(
                 "Email",
                 placeholder="you@example.com",
                 key="reset_email"
             )
+
             submitted = st.form_submit_button(
                 "Send Reset Link",
                 use_container_width=True
@@ -298,9 +283,16 @@ def render_auth_page():
 
             if submitted:
                 if not email:
-                    st.warning("Please enter your email address.")
+                    st.warning(
+                        "Please enter your email address."
+                    )
                 else:
-                    success, message = send_password_reset(email.strip())
+                    success, message = (
+                        send_password_reset(
+                            email.strip()
+                        )
+                    )
+
                     if success:
                         st.success(
                             f"Password reset email sent to {message}."
@@ -318,10 +310,18 @@ def render_auth_page():
 
 def render_sidebar_user_panel():
     st.sidebar.markdown("---")
+
     st.sidebar.markdown(
         f"**{st.session_state.user_name}**"
     )
-    st.sidebar.caption(st.session_state.user_email)
 
-    if st.sidebar.button("Logout", use_container_width=True):
+    st.sidebar.caption(
+        st.session_state.user_email
+    )
+
+    if st.sidebar.button(
+        "Logout",
+        use_container_width=True
+    ):
         logout_user()
+
