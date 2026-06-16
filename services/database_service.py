@@ -1,16 +1,12 @@
-import os
-from urllib.parse import quote_plus
-
-import streamlit as st
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+from urllib.parse import quote_plus
+import streamlit as st
+import os
 
 load_dotenv()
 
-# -------------------------------
-# DATABASE CONFIG
-# -------------------------------
-
+# Database secrets
 DB_USER = st.secrets.get("DB_USER", "")
 DB_HOST = st.secrets.get("DB_HOST", "")
 DB_PORT = st.secrets.get("DB_PORT", "5432")
@@ -26,32 +22,19 @@ DATABASE_URL = (
     f"?sslmode=require"
 )
 
-# -------------------------------
-# DATABASE ENGINE
-# -------------------------------
-
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=300,
-    pool_size=5,
-    max_overflow=10,
+    pool_timeout=30,
     connect_args={
         "sslmode": "require",
-        "connect_timeout": 15
+        "connect_timeout": 10
     }
 )
 
 
-# -------------------------------
-# SAVE RESUME
-# -------------------------------
-
 def save_resume(file_name, parsed_text):
-    """
-    Save uploaded resume
-    to PostgreSQL
-    """
 
     query = text("""
         INSERT INTO resumes (
@@ -66,42 +49,36 @@ def save_resume(file_name, parsed_text):
     """)
 
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection:
 
             result = connection.execute(
                 query,
                 {
-                    "file_name": file_name,
-                    "parsed_text": parsed_text
+                    "file_name": str(file_name),
+                    "parsed_text": str(parsed_text)
                 }
             )
 
-            connection.commit()
+            resume_id = result.scalar()
 
-            return result.scalar()
+            print(
+                f"Resume saved successfully: "
+                f"{resume_id}"
+            )
+
+            return resume_id
 
     except Exception as e:
-        print(
-            f"Database save error: {e}"
-        )
-
-        # Don't crash app
+        print(f"Database save error: {e}")
         return None
 
-
-# -------------------------------
-# SAVE EXTRACTED SKILLS
-# -------------------------------
 
 def save_extracted_skills(
     resume_id,
     skills
 ):
-    """
-    Save extracted skills
-    """
 
-    if resume_id is None:
+    if not resume_id or not skills:
         return
 
     query = text("""
@@ -116,21 +93,16 @@ def save_extracted_skills(
     """)
 
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection:
 
             for skill in skills:
                 connection.execute(
                     query,
                     {
                         "resume_id": resume_id,
-                        "skill_name": skill
+                        "skill_name": str(skill)
                     }
                 )
 
-            connection.commit()
-
     except Exception as e:
-        print(
-            f"Skill save error: {e}"
-        )
-
+        print(f"Skills save error: {e}")

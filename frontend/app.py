@@ -722,11 +722,53 @@ if uploaded_file is not None:
         )
     )
 
-    
-resume_id = save_resume(
-    uploaded_file.name,
-    extracted_text
-)
+if uploaded_file is not None:
+
+    try:
+        extracted_text = extract_resume_text(
+            uploaded_file
+        )
+
+    except Exception as e:
+        st.error(
+            "Could not read this PDF. "
+            "Try another file."
+        )
+        print(f"PDF parsing error: {e}")
+        st.stop()
+
+    try:
+        resume_id = save_resume(
+            uploaded_file.name,
+            extracted_text
+        )
+
+        if resume_id is None:
+            st.warning(
+                "Analysis completed, but "
+                "resume history could not be saved."
+            )
+
+    except Exception as e:
+        st.error(
+            "Database error while saving resume."
+        )
+        print(f"Database save error: {e}")
+        st.stop()
+
+    skills = extract_skills(
+        extracted_text
+    )
+
+    save_extracted_skills(
+        resume_id,
+        skills
+    )
+
+else:
+    st.info(
+        "Please upload a resume PDF."
+    )
 
 if resume_id is None:
     st.warning(
