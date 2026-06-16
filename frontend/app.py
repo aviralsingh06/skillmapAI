@@ -3,14 +3,6 @@ import os
 
 from auth import init_auth_session, render_auth_page, render_sidebar_user_panel
 
-sys.path.append(
-    os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            ".."
-        )
-    )
-)
 
 import streamlit as st
 import plotly.express as px
