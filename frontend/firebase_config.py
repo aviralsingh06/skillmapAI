@@ -23,21 +23,11 @@ FIREBASE_PROJECT_ID = _get_secret("FIREBASE_PROJECT_ID")
 FIREBASE_AUTH_DOMAIN = _get_secret(
     "FIREBASE_AUTH_DOMAIN",
     f"{FIREBASE_PROJECT_ID}.firebaseapp.com"
-    if FIREBASE_PROJECT_ID
-    else ""
 )
 
 FIREBASE_STORAGE_BUCKET = _get_secret(
     "FIREBASE_STORAGE_BUCKET",
     f"{FIREBASE_PROJECT_ID}.appspot.com"
-    if FIREBASE_PROJECT_ID
-    else ""
-)
-
-# Firebase service account JSON from Streamlit Secrets
-FIREBASE_SERVICE_ACCOUNT = _get_secret(
-    "FIREBASE_SERVICE_ACCOUNT",
-    ""
 )
 
 FIREBASE_AUTH_URL = (
@@ -50,15 +40,20 @@ FIREBASE_TOKEN_URL = (
 
 
 def get_firebase_credentials():
-    """Return Firebase credentials dict"""
-    if FIREBASE_SERVICE_ACCOUNT:
-        try:
-            return json.loads(FIREBASE_SERVICE_ACCOUNT)
-        except json.JSONDecodeError:
-            return None
+    try:
+        service_account = st.secrets.get(
+            "FIREBASE_SERVICE_ACCOUNT",
+            ""
+        )
 
-    # fallback for local development
+        if service_account:
+            return json.loads(service_account)
+
+    except Exception:
+        pass
+
     local_path = PROJECT_ROOT / "firebase-service-account.json"
+
     if local_path.exists():
         with open(local_path, "r", encoding="utf-8") as f:
             return json.load(f)
