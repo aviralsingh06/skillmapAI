@@ -641,6 +641,7 @@ def build_pdf_report(
     buffer.seek(0)
     return buffer.getvalue()
 
+
 # ---------------------------------
 # PAGE CONFIG
 # ---------------------------------
@@ -650,17 +651,18 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
-# Initialize authentication
+
+# Initialize authentication session state
 init_auth_session()
 
 # Show login page if not logged in
 render_auth_page()
 
-# Stop app until login
+# Stop app until login — only auth-related stop is kept
 if not st.session_state.authenticated:
     st.stop()
 
-# Show logged in user
+# Show logged-in user panel in sidebar
 render_sidebar_user_panel()
 
 inject_custom_css()
@@ -675,8 +677,7 @@ st.markdown(
             skill-gap intelligence, personalized recommendations, and learning roadmaps.
         </p>
     </div>
-    """
-    ,
+    """,
     unsafe_allow_html=True
 )
 
@@ -684,9 +685,7 @@ st.markdown(
 # SIDEBAR NAVIGATION
 # ---------------------------------
 
-st.sidebar.title(
-    "📌 Navigation"
-)
+st.sidebar.title("📌 Navigation")
 st.sidebar.caption(
     "Analyze your resume, close skill gaps, and build a focused learning plan."
 )
@@ -714,106 +713,82 @@ uploaded_file = st.file_uploader(
     help="Upload a text-based PDF for the most accurate analysis."
 )
 
-if uploaded_file is not None:
-
-    extracted_text = (
-        extract_resume_text(
-            uploaded_file
-        )
-    )
+# ---------------------------------
+# MAIN FLOW — only runs when a file is uploaded
+# All analysis is contained here; nothing leaks outside this block.
+# ---------------------------------
 
 if uploaded_file is not None:
 
+    # ── FIX 1: Single, guarded PDF extraction.
+    # The original code called extract_resume_text() TWICE — once bare
+    # (no try/except) and once guarded. The bare call crashed on bad PDFs.
+    # Now there is exactly ONE call, always inside try/except.
     try:
-        extracted_text = extract_resume_text(
-            uploaded_file
-        )
+        extracted_text = extract_resume_text(uploaded_file)
+
+        if not extracted_text or not extracted_text.strip():
+            st.error(
+                "Could not read this PDF. "
+                "The file may be scanned or image-based. "
+                "Try another file."
+            )
+            st.stop()
 
     except Exception as e:
         st.error(
             "Could not read this PDF. "
             "Try another file."
         )
-        print(
-            f"PDF parsing error: {e}"
-        )
+        print(f"PDF parsing error: {e}")
         st.stop()
 
+    # ── FIX 2: Database save is non-fatal.
+    # The original code called st.stop() when the DB save failed, which
+    # prevented all analysis from running. Now a failed DB save is logged
+    # and warned, but analysis continues normally.
+    # resume_id is always initialised to None before the try block, so
+    # it is always defined — this eliminates the NameError.
+    resume_id = None
     try:
         resume_id = save_resume(
             uploaded_file.name,
             extracted_text
         )
-
-        if resume_id is None:
-            st.warning(
-                "Analysis completed, but "
-                "resume history could not "
-                "be saved."
-            )
-
     except Exception as e:
-        st.error(
-            "Database error while "
-            "saving resume."
+        # DB failure does NOT stop analysis — just warn the user.
+        st.warning(
+            "⚠️ Resume history could not be saved to the database, "
+            "but your analysis will continue normally."
         )
-        print(
-            f"Database save error: {e}"
-        )
-        st.stop()
+        print(f"Database save error: {e}")
 
-    skills = extract_skills(
-        extracted_text
-    )
+    # ── FIX 3: Skill extraction runs regardless of DB outcome.
+    skills = extract_skills(extracted_text)
 
-    save_extracted_skills(
-        resume_id,
-        skills
-    )
+    # ── FIX 4: Only call save_extracted_skills when resume_id is valid.
+    # The original code called this unconditionally, causing errors when
+    # resume_id was None after a DB failure.
+    if resume_id is not None:
+        try:
+            save_extracted_skills(resume_id, skills)
+        except Exception as e:
+            print(f"Skills save error: {e}")
 
-else:
-    st.info(
-        "Please upload a resume PDF."
-    )
-
-if resume_id is None:
-    st.warning(
-        "Analysis completed, but "
-        "resume history could not be saved."
-    )
-
-
-
-    skills = extract_skills(
-        extracted_text
-    )
-
-    save_extracted_skills(
-        resume_id,
-        skills
-    )
-
-    st.success(
-        "✅ Resume uploaded and analyzed!"
-    )
+    st.success("✅ Resume uploaded and analyzed!")
 
     selected_role = st.selectbox(
         "Choose Target Job Role",
         list(JOB_ROLES.keys())
     )
 
-    result = analyze_skill_gap(
-        skills,
-        selected_role
-    )
+    result = analyze_skill_gap(skills, selected_role)
 
-    resume_score = (
-        calculate_resume_score(
-            result["match_score"],
-            skills,
-            result["missing_skills"],
-            extracted_text
-        )
+    resume_score = calculate_resume_score(
+        result["match_score"],
+        skills,
+        result["missing_skills"],
+        extracted_text
     )
 
     ats_result = analyze_ats_resume(
@@ -1047,6 +1022,7 @@ if resume_id is None:
             use_container_width=True
         )
         st.divider()
+
     # ---------------------------------
     # RESUME ANALYSIS
     # ---------------------------------
@@ -1125,65 +1101,35 @@ if resume_id is None:
 
     elif page == "ATS Analysis":
 
-        st.subheader(
-            "📄 ATS Resume Analysis"
-        )
+        st.subheader("📄 ATS Resume Analysis")
 
         col1, col2 = st.columns(2)
 
         with col1:
-
             st.metric(
                 "ATS Score",
                 f"{ats_result['score']}/100"
             )
 
         with col2:
-
             st.metric(
                 "Resume Score",
                 f"{resume_score}/100"
             )
 
-        st.info(
-            ats_result["status"]
-        )
+        st.info(ats_result["status"])
 
-        st.subheader(
-            "✅ ATS Strengths"
-        )
+        st.subheader("✅ ATS Strengths")
+        for strength in ats_result["strengths"]:
+            st.success(strength)
 
-        for strength in ats_result[
-            "strengths"
-        ]:
+        st.subheader("❌ ATS Weaknesses")
+        for weakness in ats_result["weaknesses"]:
+            st.error(weakness)
 
-            st.success(
-                strength
-            )
-
-        st.subheader(
-            "❌ ATS Weaknesses"
-        )
-
-        for weakness in ats_result[
-            "weaknesses"
-        ]:
-
-            st.error(
-                weakness
-            )
-
-        st.subheader(
-            "💡 ATS Improvement Tips"
-        )
-
-        for suggestion in ats_result[
-            "suggestions"
-        ]:
-
-            st.warning(
-                suggestion
-            )
+        st.subheader("💡 ATS Improvement Tips")
+        for suggestion in ats_result["suggestions"]:
+            st.warning(suggestion)
 
     # ---------------------------------
     # LEARNING PLAN
@@ -1191,43 +1137,18 @@ if resume_id is None:
 
     elif page == "Learning Plan":
 
-        learning_plan = (
-            get_learning_recommendations(
-                result[
-                    "missing_skills"
-                ]
-            )
+        learning_plan = get_learning_recommendations(
+            result["missing_skills"]
         )
 
-        st.subheader(
-            "📚 Learning Recommendations"
-        )
+        st.subheader("📚 Learning Recommendations")
 
-        for skill, content in (
-            learning_plan.items()
-        ):
-
-            with st.expander(
-                f"📌 {skill}",
-                expanded=True
-            ):
-
-                st.write(
-                    "Topics to Learn:"
-                )
-
-                for topic in content[
-                    "topics"
-                ]:
-
-                    st.write(
-                        f"• {topic}"
-                    )
-
-                st.write(
-                    f"📖 Resource: "
-                    f"{content['resource']}"
-                )
+        for skill, content in learning_plan.items():
+            with st.expander(f"📌 {skill}", expanded=True):
+                st.write("Topics to Learn:")
+                for topic in content["topics"]:
+                    st.write(f"• {topic}")
+                st.write(f"📖 Resource: {content['resource']}")
 
     # ---------------------------------
     # ROADMAP
@@ -1235,33 +1156,14 @@ if resume_id is None:
 
     elif page == "Skill Roadmap":
 
-        roadmap = create_roadmap(
-            result[
-                "missing_skills"
-            ]
-        )
+        roadmap = create_roadmap(result["missing_skills"])
 
-        st.subheader(
-            "🗺️ Skill Gap Roadmap"
-        )
+        st.subheader("🗺️ Skill Gap Roadmap")
 
         for step in roadmap:
-
-            st.info(
-                f"{step['step']}️⃣ "
-                f"{step['skill']}"
-            )
-
-            st.write(
-                f"Priority: "
-                f"{step['priority']}"
-            )
-
-            st.write(
-                f"Estimated Time: "
-                f"{step['duration']}"
-            )
-
+            st.info(f"{step['step']}️⃣ {step['skill']}")
+            st.write(f"Priority: {step['priority']}")
+            st.write(f"Estimated Time: {step['duration']}")
             st.divider()
 
     # ---------------------------------
@@ -1270,36 +1172,18 @@ if resume_id is None:
 
     elif page == "Courses":
 
-        st.subheader(
-            "🎓 Course Recommendations"
-        )
+        st.subheader("🎓 Course Recommendations")
 
         courses = recommend_courses(
             selected_role,
-            result[
-                "missing_skills"
-            ]
+            result["missing_skills"]
         )
 
         if courses:
-
             for course in courses:
-
-                st.success(
-                    f"📘 "
-                    f"{course['title']}"
-                )
-
-                st.write(
-                    f"Platform: "
-                    f"{course['platform']}"
-                )
-
-                st.markdown(
-                    f"[🔗 Open Course]"
-                    f"({course['link']})"
-                )
-
+                st.success(f"📘 {course['title']}")
+                st.write(f"Platform: {course['platform']}")
+                st.markdown(f"[🔗 Open Course]({course['link']})")
                 st.divider()
 
     # ---------------------------------
@@ -1308,25 +1192,20 @@ if resume_id is None:
 
     elif page == "Resume Suggestions":
 
-        st.subheader(
-            "📝 Resume Improvement Suggestions"
-        )
+        st.subheader("📝 Resume Improvement Suggestions")
 
-        suggestions = (
-            generate_resume_suggestions(
-                extracted_text,
-                selected_role,
-                result[
-                    "missing_skills"
-                ]
-            )
+        suggestions = generate_resume_suggestions(
+            extracted_text,
+            selected_role,
+            result["missing_skills"]
         )
 
         for suggestion in suggestions:
+            st.warning(f"💡 {suggestion}")
 
-            st.warning(
-                f"💡 {suggestion}"
-            )
+# ---------------------------------
+# NO FILE UPLOADED — welcome screen
+# ---------------------------------
 
 else:
     render_section_header(
